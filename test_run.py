@@ -210,6 +210,46 @@ PREPROCESS = transforms.Compose([
 ])
 
 # ─────────────────────────────────────────────
+# BRAIN TUMOUR FACTS  (shown while processing)
+# ─────────────────────────────────────────────
+BRAIN_TUMOUR_FACTS = [
+    ("🧠 Did you know?",
+     "Gliomas are the most common primary brain tumours in adults, accounting for about 80% of all malignant brain tumours. They arise from glial cells — the supportive tissue that protects and nourishes neurons."),
+    ("🔬 About Meningiomas",
+     "Meningiomas grow from the meninges, the protective membranes surrounding the brain and spinal cord. The vast majority are benign and slow-growing — many are discovered incidentally during scans done for entirely unrelated reasons."),
+    ("💡 Pituitary Tumours",
+     "Pituitary adenomas are almost always benign. Because the pituitary gland regulates key hormones, even a small tumour here can trigger significant hormonal changes — affecting growth, metabolism, fertility, and blood pressure."),
+    ("📊 Early Detection Saves Lives",
+     "For low-grade gliomas detected early, 5-year survival rates can exceed 70%. Routine check-ups and prompt investigation of neurological symptoms are among the most important steps for improving outcomes."),
+    ("⚠️ Warning Signs to Know",
+     "Common symptoms warranting prompt evaluation include: new-onset seizures, persistent morning headaches, unexplained nausea or vomiting, gradual changes in vision or speech, memory difficulties, and personality changes."),
+    ("🩺 Headaches & Brain Tumours",
+     "Not every headache signals a tumour — fewer than 1 in 1,000 headache patients have one. However, headaches that are worst in the morning, wake you from sleep, or escalate rapidly over days should be clinically evaluated without delay."),
+    ("🏥 Modern Treatment Options",
+     "Treatment depends on tumour type, grade, size, and location. Options include surgical resection, stereotactic radiosurgery, fractionated radiotherapy, chemotherapy, targeted molecular therapy, and immunotherapy — often used in combination."),
+    ("🧬 Genetics & Risk Factors",
+     "The majority of brain tumours are not inherited. However, conditions like Neurofibromatosis types 1 and 2, Li-Fraumeni syndrome, and Von Hippel-Lindau disease do carry elevated risk. Genetic counselling is advisable for families with multiple affected members."),
+    ("🌍 Global Incidence",
+     "Brain and CNS tumours account for approximately 3% of all cancers worldwide, with around 308,000 new cases diagnosed annually. They affect people of all ages, though incidence peaks in childhood and again in older adulthood."),
+    ("👶 Brain Tumours in Children",
+     "Brain tumours are the most common solid tumour in children and the leading cause of cancer-related death in paediatric patients. Medulloblastoma and pilocytic astrocytoma are the most frequent types, with many children achieving long-term remission."),
+    ("🔍 Why MRI is the Gold Standard",
+     "MRI provides exceptional soft-tissue contrast without ionising radiation. It allows clinicians to assess tumour size, exact location, involvement of adjacent structures, and vascularity — critical information for surgical planning and monitoring treatment response."),
+    ("💊 Watch-and-Wait Approach",
+     "For many benign or low-grade tumours, active surveillance (watch-and-wait) is an appropriate first step. Regular MRI monitoring allows clinicians to detect any growth while avoiding unnecessary intervention and preserving quality of life."),
+    ("🧘 Reducing Modifiable Risk",
+     "While most brain tumour risk factors are not controllable, general brain health practices matter: avoiding unnecessary ionising radiation exposure, not smoking, maintaining a healthy body weight, and protecting your head from repeated trauma are all advisable."),
+    ("📱 AI in Neuro-Oncology",
+     "Deep learning models trained on large MRI datasets can now assist radiologists in detecting and classifying brain tumours faster and with increasing precision. AI is a tool to support clinical judgement — not to replace the expertise of qualified clinicians."),
+    ("🕐 Time Matters for High-Grade Tumours",
+     "For aggressive tumours like Glioblastoma Multiforme (GBM), time from diagnosis to treatment initiation directly affects survival. The current standard of care — surgery followed by concurrent radiotherapy and temozolomide chemotherapy — should begin as soon as the patient is fit."),
+    ("🧪 Tumour Biomarkers",
+     "Molecular markers like IDH1/2 mutation status, MGMT promoter methylation, and 1p/19q co-deletion have transformed brain tumour classification. These markers guide treatment decisions and are strong predictors of prognosis independent of tumour grade."),
+    ("🫀 Blood-Brain Barrier Challenges",
+     "The blood-brain barrier (BBB), which protects the brain from harmful substances, also limits the delivery of many chemotherapy drugs to brain tumours. Overcoming the BBB is one of the most active areas of research in neuro-oncology today."),
+]
+
+# ─────────────────────────────────────────────
 # MODEL BUILDERS
 # ─────────────────────────────────────────────
 
@@ -468,7 +508,21 @@ def fig_to_pil(fig) -> Image.Image:
 # MAIN APP
 # ─────────────────────────────────────────────
 
+def _show_random_fact():
+    """Render a randomly chosen tumour fact card."""
+    import random
+    title, body = random.choice(BRAIN_TUMOUR_FACTS)
+    st.markdown(f"""
+    <div class="ns-card" style="border-color:#30363d; margin-top:1.2rem;">
+      <div class="ns-card-title" style="color:#58a6ff;">While you wait — {title}</div>
+      <div style="font-size:0.88rem; color:#c9d1d9; line-height:1.7;">{body}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def main():
+    import random
+
     # ── Header ──
     st.markdown("""
     <div class="ns-header">
@@ -486,10 +540,12 @@ def main():
                         unsafe_allow_html=True)
             st.stop()
 
-    # ── Upload ──
+    # ─────────────────────────────────────────────
+    # STEP 1 — Upload
+    # ─────────────────────────────────────────────
     st.markdown('<div class="step-label">Step 1 — Upload MRI Slices</div>', unsafe_allow_html=True)
     uploaded_files = st.file_uploader(
-        label="Upload MRI brain scan slices (PNG / JPG / JPEG / WEBP) — any number of slices",
+        label="Upload one or more brain MRI scan slices (PNG / JPG / JPEG / WEBP)",
         type=["png", "jpg", "jpeg", "webp"],
         accept_multiple_files=True,
         key="mri_upload",
@@ -500,41 +556,86 @@ def main():
         <div class="ns-card" style="text-align:center; padding: 2.5rem 1.6rem; color:#8b949e;">
           <div style="font-size:2.5rem;margin-bottom:0.5rem;">🔬</div>
           <div style="font-weight:600; margin-bottom:0.3rem;">No images uploaded yet</div>
-          <div style="font-size:0.85rem;">Upload between 1 and 5 MRI brain scan slices to begin analysis.</div>
+          <div style="font-size:0.85rem;">
+            Upload your MRI brain scan slices above, then press <strong style="color:#e6edf3;">Analyse Scans</strong> when you are ready.
+          </div>
         </div>
         """, unsafe_allow_html=True)
         _render_disclaimer()
         return
 
-    # ── Process each image ──
+    # Show thumbnails of uploaded files so the user can review before predicting
+    st.markdown(f"""
+    <div style="font-size:0.82rem; color:#8b949e; margin: 0.3rem 0 0.8rem 0;">
+      {len(uploaded_files)} slice(s) loaded. Review them below, then press <strong style="color:#e6edf3;">Analyse Scans</strong> when ready.
+    </div>
+    """, unsafe_allow_html=True)
+
+    thumb_cols = st.columns(min(len(uploaded_files), 6))
+    for i, f in enumerate(uploaded_files):
+        with thumb_cols[i % 6]:
+            st.image(Image.open(f).convert("RGB"), caption=f.name, use_container_width=True)
+
     st.markdown('<hr class="ns-divider">', unsafe_allow_html=True)
-    st.markdown('<div class="step-label">Step 2 — Verification · Prediction · Explainability</div>',
-                unsafe_allow_html=True)
 
-    # ── Pass 1: verify all images first, collect valid ones ──
-    valid_slices   = []   # list of (idx, file, pil_img, tensor)
-    invalid_slices = []   # list of (idx, file, reason)
+    # ─────────────────────────────────────────────
+    # STEP 2 — Predict button
+    # ─────────────────────────────────────────────
+    st.markdown('<div class="step-label">Step 2 — Run Analysis</div>', unsafe_allow_html=True)
 
-    for idx, file in enumerate(uploaded_files):
-        pil_img = Image.open(file).convert("RGB")
-        ok, reason = is_valid_mri(pil_img)
-        if ok:
-            tensor = PREPROCESS(pil_img)
-            valid_slices.append((idx, file, pil_img, tensor))
-        else:
-            invalid_slices.append((idx, file, reason))
+    col_btn, col_note = st.columns([1, 4], gap="small")
+    with col_btn:
+        run_analysis = st.button(
+            "🔍 Analyse Scans",
+            type="primary",
+            use_container_width=True,
+        )
+    with col_note:
+        st.markdown(
+            '<div style="font-size:0.8rem; color:#8b949e; padding-top:0.55rem;">'
+            'Verification → Ensemble Prediction → GradCAM Heatmaps</div>',
+            unsafe_allow_html=True,
+        )
 
-    # ── Show blocked images immediately ──
+    if not run_analysis:
+        _render_disclaimer()
+        return
+
+    # ─────────────────────────────────────────────
+    # STEP 3 — Verify & Predict (with rotating facts)
+    # ─────────────────────────────────────────────
+    st.markdown('<hr class="ns-divider">', unsafe_allow_html=True)
+    st.markdown('<div class="step-label">Step 3 — Results</div>', unsafe_allow_html=True)
+
+    # ── Pass 1: verify all images ──
+    valid_slices   = []
+    invalid_slices = []
+
+    verify_placeholder = st.empty()
+    with verify_placeholder:
+        with st.spinner("Verifying uploaded images…"):
+            _show_random_fact()
+            for idx, file in enumerate(uploaded_files):
+                pil_img = Image.open(file).convert("RGB")
+                ok, reason = is_valid_mri(pil_img)
+                if ok:
+                    tensor = PREPROCESS(pil_img)
+                    valid_slices.append((idx, file, pil_img, tensor))
+                else:
+                    invalid_slices.append((idx, file, reason))
+    verify_placeholder.empty()
+
+    # ── Show blocked images ──
     for idx, file, reason in invalid_slices:
         st.markdown(f"""
         <div class="ns-card">
           <div class="ns-card-title">Slice {idx + 1} — {file.name}</div>
           <div class="ns-error">
-            🔴 <strong>This image could not be verified as an MRI scan.</strong><br><br>
+            🔴 <strong>This image could not be verified as a valid MRI scan.</strong><br><br>
             {reason}<br><br>
-            Please upload a valid brain MRI scan image (grayscale, proper contrast, not blank).
-            If you believe this is a valid scan, check that the file has not been corrupted or
-            incorrectly exported.
+            Please remove this file and upload a valid brain MRI scan image. Valid MRI scans are
+            grayscale, have visible brain structure, and are not blank or corrupted. If you believe
+            this is a valid scan, check that the file has not been incorrectly exported or compressed.
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -546,69 +647,66 @@ def main():
           <div style="font-size:2rem;margin-bottom:0.5rem;">🚫</div>
           <div style="font-weight:600;">No valid MRI scans to analyse.</div>
           <div style="font-size:0.85rem; margin-top:0.4rem;">
-            None of the uploaded images passed MRI verification. Please upload valid brain MRI scans.
+            None of the uploaded images passed MRI verification. Please upload valid brain MRI scans and try again.
           </div>
         </div>
         """, unsafe_allow_html=True)
         _render_disclaimer()
         return
 
-    # ── Pass 2: run predictions on all valid slices ──
-    results = []   # list of (idx, file, pil_img, tensor, probs, pred_idx, conf)
-    with st.spinner("Running ensemble model…"):
-        for idx, file, pil_img, tensor in valid_slices:
-            probs, pred_idx, conf = predict_ensemble(tensor, resnet, effnet)
-            results.append((idx, file, pil_img, tensor, probs, pred_idx, conf))
+    # ── Pass 2: ensemble predictions ──
+    results = []
+    pred_placeholder = st.empty()
+    with pred_placeholder:
+        with st.spinner(f"Running ensemble model on {len(valid_slices)} valid slice(s)…"):
+            _show_random_fact()
+            for idx, file, pil_img, tensor in valid_slices:
+                probs, pred_idx, conf = predict_ensemble(tensor, resnet, effnet)
+                results.append((idx, file, pil_img, tensor, probs, pred_idx, conf))
+    pred_placeholder.empty()
 
-    # ── Identify the highest-confidence slice for GradCAM ──
-    best_result = max(results, key=lambda x: x[6])   # x[6] = conf
-    best_idx    = best_result[0]
+    # ── Pass 3: GradCAM for every valid slice ──
+    gradcam_overlays = {}
+    cam_placeholder = st.empty()
+    with cam_placeholder:
+        with st.spinner(f"Generating GradCAM heatmaps for {len(results)} slice(s)…"):
+            _show_random_fact()
+            for idx, file, pil_img, tensor, probs, pred_idx, conf in results:
+                cam     = ensemble_gradcam(tensor, resnet, effnet, pred_idx)
+                overlay = overlay_gradcam(pil_img, cam)
+                gradcam_overlays[idx] = overlay
+    cam_placeholder.empty()
 
-    # ── Generate GradCAM only for the best slice ──
-    with st.spinner("Generating GradCAM heatmap for highest-confidence slice…"):
-        _, _, best_pil, best_tensor, _, best_pred_idx, _ = best_result
-        best_cam     = ensemble_gradcam(best_tensor, resnet, effnet, best_pred_idx)
-        best_overlay = overlay_gradcam(best_pil, best_cam)
-
-    # ── Render all valid slices ──
+    # ─────────────────────────────────────────────
+    # RENDER RESULTS
+    # ─────────────────────────────────────────────
     for idx, file, pil_img, tensor, probs, pred_idx, conf in results:
         pred_class = CLASS_NAMES[pred_idx]
-        is_best    = (idx == best_idx)
+        overlay    = gradcam_overlays[idx]
 
         with st.container():
-            label = f"Slice {idx + 1} — {file.name}"
-            if is_best:
-                label += " &nbsp;<span style='color:#d29922;font-size:0.7rem;'>★ HIGHEST CONFIDENCE</span>"
-
             st.markdown(f"""
             <div class="ns-card">
-              <div class="ns-card-title">{label}</div>
+              <div class="ns-card-title">Slice {idx + 1} — {file.name}</div>
             </div>
             """, unsafe_allow_html=True)
 
-            if is_best:
-                col_orig, col_heatmap, col_results = st.columns([1, 1, 1.4], gap="medium")
-            else:
-                col_orig, col_results = st.columns([1, 1.8], gap="medium")
+            col_orig, col_heatmap, col_results = st.columns([1, 1, 1.4], gap="medium")
 
-            # ── Original image ──
+            # Original scan
             with col_orig:
-                st.markdown('<div class="step-label">Original Scan</div>',
-                            unsafe_allow_html=True)
+                st.markdown('<div class="step-label">Original Scan</div>', unsafe_allow_html=True)
                 st.image(pil_img, use_container_width=True)
 
-            # ── GradCAM (best slice only) ──
-            if is_best:
-                with col_heatmap:
-                    st.markdown('<div class="step-label">GradCAM Heatmap</div>',
-                                unsafe_allow_html=True)
-                    st.image(best_overlay, use_container_width=True,
-                             caption="Region that most influenced the prediction")
+            # GradCAM heatmap
+            with col_heatmap:
+                st.markdown('<div class="step-label">GradCAM Heatmap</div>', unsafe_allow_html=True)
+                st.image(overlay, use_container_width=True,
+                         caption="Regions that most influenced the prediction")
 
-            # ── Results ──
+            # Prediction & confidence
             with col_results:
-                st.markdown('<div class="step-label">Prediction</div>',
-                            unsafe_allow_html=True)
+                st.markdown('<div class="step-label">Prediction</div>', unsafe_allow_html=True)
 
                 st.markdown(
                     f'<div style="margin-bottom:1rem;">{prediction_badge_html(pred_class)}'
@@ -627,16 +725,9 @@ def main():
 
                 if pred_class != "No Tumor":
                     st.markdown(
-                        f'<div style="margin-top:0.8rem;font-size:0.78rem;color:#8b949e;">'
-                        f'Detected tumour type: <span style="color:#f85149;font-weight:600;">{pred_class}</span>. '
+                        f'<div style="margin-top:0.9rem; font-size:0.78rem; color:#8b949e;">'
+                        f'Detected tumour type: <span style="color:#f85149; font-weight:600;">{pred_class}</span>. '
                         f'Please refer to a qualified radiologist for clinical confirmation.</div>',
-                        unsafe_allow_html=True,
-                    )
-
-                if is_best and not (idx == results[0][0] and len(results) == 1):
-                    st.markdown(
-                        '<div style="margin-top:0.6rem;font-size:0.75rem;color:#d29922;">'
-                        '★ GradCAM shown for this slice — it had the highest prediction confidence.</div>',
                         unsafe_allow_html=True,
                     )
 
