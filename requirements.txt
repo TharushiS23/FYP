@@ -9,4 +9,4 @@ pandas
 numpy
 grad-cam
 streamlit
-opencv-python
+opencv-python-headless
