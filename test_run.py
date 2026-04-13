@@ -182,6 +182,30 @@ html, body, [class*="css"] {
 
 /* ── Divider ── */
 .ns-divider { border: none; border-top: 1px solid #21262d; margin: 1.8rem 0; }
+
+/* ── Fact card (persistent, dismissible) ── */
+.ns-fact-card {
+    position: relative;
+    background: #0e1825;
+    border: 1px solid #1f3a5c;
+    border-left: 3px solid #58a6ff;
+    border-radius: 10px;
+    padding: 1.1rem 3rem 1.1rem 1.4rem;
+    margin: 1rem 0 1.4rem 0;
+}
+.ns-fact-title {
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #58a6ff;
+    margin-bottom: 0.45rem;
+}
+.ns-fact-body {
+    font-size: 0.87rem;
+    color: #c9d1d9;
+    line-height: 1.7;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -210,7 +234,7 @@ PREPROCESS = transforms.Compose([
 ])
 
 # ─────────────────────────────────────────────
-# BRAIN TUMOUR FACTS  (shown while processing)
+# BRAIN TUMOUR FACTS
 # ─────────────────────────────────────────────
 BRAIN_TUMOUR_FACTS = [
     ("🧠 Did you know?",
@@ -266,10 +290,8 @@ def build_resnet(num_classes=NUM_CLASSES):
 def build_efficientnet(num_classes=NUM_CLASSES):
     """EfficientNet-B0: freeze all blocks except the last one + classifier."""
     model = models.efficientnet_b0(weights=None)
-    # Freeze everything
     for param in model.parameters():
         param.requires_grad = False
-    # Unfreeze last MBConv block (index 7) + classifier
     for param in model.features[7].parameters():
         param.requires_grad = True
     in_features = model.classifier[1].in_features
@@ -307,22 +329,12 @@ def load_models():
 # ─────────────────────────────────────────────
 
 def is_valid_mri(pil_image: Image.Image) -> tuple[bool, str]:
-    """
-    Heuristic verification that the image looks like a brain MRI scan.
-    Checks:
-      1. Not near-blank / all-black
-      2. Grayscale-ish (MRI scans have low colour saturation)
-      3. Reasonable dynamic range
-    Returns (is_valid, reason_if_invalid)
-    """
     img_np = np.array(pil_image.convert("RGB")).astype(np.float32)
 
-    # 1. Brightness check — reject near-black images
     mean_brightness = img_np.mean()
     if mean_brightness < 5.0:
         return False, "Image appears to be blank or completely black."
 
-    # 2. Colour saturation check — MRI scans are grayscale (R≈G≈B)
     r, g, b = img_np[:,:,0], img_np[:,:,1], img_np[:,:,2]
     rg_diff = np.abs(r - g).mean()
     rb_diff = np.abs(r - b).mean()
@@ -334,7 +346,6 @@ def is_valid_mri(pil_image: Image.Image) -> tuple[bool, str]:
             "grayscale. Please upload a valid MRI scan."
         )
 
-    # 3. Dynamic range — reject images with almost no contrast
     gray = img_np.mean(axis=2)
     if gray.std() < 8.0:
         return False, (
@@ -351,16 +362,11 @@ def is_valid_mri(pil_image: Image.Image) -> tuple[bool, str]:
 def predict_ensemble(tensor: torch.Tensor,
                      resnet: nn.Module,
                      effnet: nn.Module) -> tuple[np.ndarray, int, float]:
-    """
-    Class-wise logit-weighted ensemble.
-    Returns (softmax_probs, predicted_class_idx, confidence).
-    """
     inp = tensor.unsqueeze(0).to(DEVICE)
     with torch.no_grad():
-        logits_r = resnet(inp).squeeze(0).cpu()   # [4]
-        logits_e = effnet(inp).squeeze(0).cpu()   # [4]
+        logits_r = resnet(inp).squeeze(0).cpu()
+        logits_e = effnet(inp).squeeze(0).cpu()
 
-    # Class-wise weighted average of logits
     combined = RESNET_WEIGHTS * logits_r + EFFICIENTNET_WEIGHTS * logits_e
     probs = torch.softmax(combined, dim=0).numpy()
     pred  = int(np.argmax(probs))
@@ -372,8 +378,6 @@ def predict_ensemble(tensor: torch.Tensor,
 # ─────────────────────────────────────────────
 
 class GradCAM:
-    """Simple GradCAM hook for a single target layer."""
-
     def __init__(self, model: nn.Module, target_layer: nn.Module):
         self.model        = model
         self.gradients    = None
@@ -401,16 +405,14 @@ class GradCAM:
         logits = self.model(inp)
         logits[0, class_idx].backward()
 
-        weights = self.gradients.mean(dim=(2, 3), keepdim=True)  # [1,C,1,1]
+        weights = self.gradients.mean(dim=(2, 3), keepdim=True)
         cam     = (weights * self.activations).sum(dim=1).squeeze()
         cam     = torch.relu(cam).cpu().numpy()
 
-        # Normalise
         cam -= cam.min()
         if cam.max() > 0:
             cam /= cam.max()
 
-        # Resize to 224×224
         cam = cv2.resize(cam, (224, 224))
         return cam
 
@@ -420,10 +422,7 @@ class GradCAM:
 
 
 def get_target_layers(resnet: nn.Module, effnet: nn.Module):
-    """Return the last conv layers for GradCAM."""
-    # ResNet-50: last layer of layer4
     resnet_layer = resnet.layer4[-1].conv3
-    # EfficientNet-B0: last conv in last MBConv block
     effnet_layer  = effnet.features[7][-1].block[-1][0]
     return resnet_layer, effnet_layer
 
@@ -432,10 +431,6 @@ def ensemble_gradcam(tensor: torch.Tensor,
                      resnet: nn.Module,
                      effnet: nn.Module,
                      class_idx: int) -> np.ndarray:
-    """
-    Generate GradCAM from both models and average them.
-    Uses same class-wise weights as the ensemble.
-    """
     r_layer, e_layer = get_target_layers(resnet, effnet)
 
     gcam_r = GradCAM(resnet, r_layer)
@@ -447,7 +442,6 @@ def ensemble_gradcam(tensor: torch.Tensor,
     gcam_r.remove_hooks()
     gcam_e.remove_hooks()
 
-    # Weight the CAMs the same way we weight the logits
     w_r = float(RESNET_WEIGHTS[class_idx])
     w_e = float(EFFICIENTNET_WEIGHTS[class_idx])
     combined = (w_r * cam_r + w_e * cam_e) / (w_r + w_e)
@@ -457,7 +451,6 @@ def ensemble_gradcam(tensor: torch.Tensor,
 def overlay_gradcam(pil_image: Image.Image,
                     cam: np.ndarray,
                     alpha: float = 0.45) -> np.ndarray:
-    """Overlay a GradCAM heatmap on the original image."""
     orig   = np.array(pil_image.convert("RGB"))
     orig   = cv2.resize(orig, (224, 224))
     heatmap = cv2.applyColorMap(
@@ -505,24 +498,56 @@ def fig_to_pil(fig) -> Image.Image:
     return Image.open(buf)
 
 # ─────────────────────────────────────────────
-# MAIN APP
+# PERSISTENT FACT CARD  (NEW)
 # ─────────────────────────────────────────────
 
-def _show_random_fact():
-    """Render a randomly chosen tumour fact card."""
+def _init_fact_state():
+    """
+    Pick a random fact once per analysis run and store it in session state.
+    Call this before the spinner blocks so the same fact persists across reruns.
+    """
     import random
-    title, body = random.choice(BRAIN_TUMOUR_FACTS)
+    if "fact_dismissed" not in st.session_state:
+        st.session_state.fact_dismissed = False
+    if "current_fact" not in st.session_state:
+        st.session_state.current_fact = random.choice(BRAIN_TUMOUR_FACTS)
+
+
+def _reset_fact():
+    """Pick a fresh fact for the next analysis run."""
+    import random
+    st.session_state.fact_dismissed = False
+    st.session_state.current_fact = random.choice(BRAIN_TUMOUR_FACTS)
+
+
+def _render_fact_card():
+    """
+    Render the persistent, dismissible fact card.
+    The card stays visible until the user presses ✕.
+    Nothing is rendered once dismissed.
+    """
+    if st.session_state.get("fact_dismissed", False):
+        return
+
+    title, body = st.session_state.current_fact
+
     st.markdown(f"""
-    <div class="ns-card" style="border-color:#30363d; margin-top:1.2rem;">
-      <div class="ns-card-title" style="color:#58a6ff;">While you wait — {title}</div>
-      <div style="font-size:0.88rem; color:#c9d1d9; line-height:1.7;">{body}</div>
+    <div class="ns-fact-card">
+      <div class="ns-fact-title">💡 Did you know? &nbsp;·&nbsp; {title}</div>
+      <div class="ns-fact-body">{body}</div>
     </div>
     """, unsafe_allow_html=True)
 
+    # Dismiss button — sits below the card so it's always visible
+    if st.button("✕ Dismiss this fact", key="dismiss_fact"):
+        st.session_state.fact_dismissed = True
+        st.rerun()
+
+# ─────────────────────────────────────────────
+# MAIN APP
+# ─────────────────────────────────────────────
 
 def main():
-    import random
-
     # ── Header ──
     st.markdown("""
     <div class="ns-header">
@@ -564,7 +589,7 @@ def main():
         _render_disclaimer()
         return
 
-    # Show thumbnails of uploaded files so the user can review before predicting
+    # Show thumbnails
     st.markdown(f"""
     <div style="font-size:0.82rem; color:#8b949e; margin: 0.3rem 0 0.8rem 0;">
       {len(uploaded_files)} slice(s) loaded. Review them below, then press <strong style="color:#e6edf3;">Analyse Scans</strong> when ready.
@@ -602,28 +627,30 @@ def main():
         return
 
     # ─────────────────────────────────────────────
-    # STEP 3 — Verify & Predict (with rotating facts)
+    # STEP 3 — Verify & Predict
     # ─────────────────────────────────────────────
     st.markdown('<hr class="ns-divider">', unsafe_allow_html=True)
     st.markdown('<div class="step-label">Step 3 — Results</div>', unsafe_allow_html=True)
+
+    # Initialise / refresh the fact for this run
+    _reset_fact()
+
+    # Show the persistent fact card ONCE — stays until user dismisses it
+    _render_fact_card()
 
     # ── Pass 1: verify all images ──
     valid_slices   = []
     invalid_slices = []
 
-    verify_placeholder = st.empty()
-    with verify_placeholder:
-        with st.spinner("Verifying uploaded images…"):
-            _show_random_fact()
-            for idx, file in enumerate(uploaded_files):
-                pil_img = Image.open(file).convert("RGB")
-                ok, reason = is_valid_mri(pil_img)
-                if ok:
-                    tensor = PREPROCESS(pil_img)
-                    valid_slices.append((idx, file, pil_img, tensor))
-                else:
-                    invalid_slices.append((idx, file, reason))
-    verify_placeholder.empty()
+    with st.spinner("Verifying uploaded images…"):
+        for idx, file in enumerate(uploaded_files):
+            pil_img = Image.open(file).convert("RGB")
+            ok, reason = is_valid_mri(pil_img)
+            if ok:
+                tensor = PREPROCESS(pil_img)
+                valid_slices.append((idx, file, pil_img, tensor))
+            else:
+                invalid_slices.append((idx, file, reason))
 
     # ── Show blocked images ──
     for idx, file, reason in invalid_slices:
@@ -656,26 +683,18 @@ def main():
 
     # ── Pass 2: ensemble predictions ──
     results = []
-    pred_placeholder = st.empty()
-    with pred_placeholder:
-        with st.spinner(f"Running ensemble model on {len(valid_slices)} valid slice(s)…"):
-            _show_random_fact()
-            for idx, file, pil_img, tensor in valid_slices:
-                probs, pred_idx, conf = predict_ensemble(tensor, resnet, effnet)
-                results.append((idx, file, pil_img, tensor, probs, pred_idx, conf))
-    pred_placeholder.empty()
+    with st.spinner(f"Running ensemble model on {len(valid_slices)} valid slice(s)…"):
+        for idx, file, pil_img, tensor in valid_slices:
+            probs, pred_idx, conf = predict_ensemble(tensor, resnet, effnet)
+            results.append((idx, file, pil_img, tensor, probs, pred_idx, conf))
 
-    # ── Pass 3: GradCAM for every valid slice ──
+    # ── Pass 3: GradCAM ──
     gradcam_overlays = {}
-    cam_placeholder = st.empty()
-    with cam_placeholder:
-        with st.spinner(f"Generating GradCAM heatmaps for {len(results)} slice(s)…"):
-            _show_random_fact()
-            for idx, file, pil_img, tensor, probs, pred_idx, conf in results:
-                cam     = ensemble_gradcam(tensor, resnet, effnet, pred_idx)
-                overlay = overlay_gradcam(pil_img, cam)
-                gradcam_overlays[idx] = overlay
-    cam_placeholder.empty()
+    with st.spinner(f"Generating GradCAM heatmaps for {len(results)} slice(s)…"):
+        for idx, file, pil_img, tensor, probs, pred_idx, conf in results:
+            cam     = ensemble_gradcam(tensor, resnet, effnet, pred_idx)
+            overlay = overlay_gradcam(pil_img, cam)
+            gradcam_overlays[idx] = overlay
 
     # ─────────────────────────────────────────────
     # RENDER RESULTS
@@ -693,18 +712,15 @@ def main():
 
             col_orig, col_heatmap, col_results = st.columns([1, 1, 1.4], gap="medium")
 
-            # Original scan
             with col_orig:
                 st.markdown('<div class="step-label">Original Scan</div>', unsafe_allow_html=True)
                 st.image(pil_img, use_container_width=True)
 
-            # GradCAM heatmap
             with col_heatmap:
                 st.markdown('<div class="step-label">GradCAM Heatmap</div>', unsafe_allow_html=True)
                 st.image(overlay, use_container_width=True,
                          caption="Regions that most influenced the prediction")
 
-            # Prediction & confidence
             with col_results:
                 st.markdown('<div class="step-label">Prediction</div>', unsafe_allow_html=True)
 
