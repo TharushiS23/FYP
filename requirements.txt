@@ -8,3 +8,9 @@ optuna
 pandas
 numpy
 grad-cam
+streamlit
+opencv-python
+
+
+
+
